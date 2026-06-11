@@ -12,6 +12,7 @@ Drug-drug interactions (DDIs) are a major challenge in medication safety, partic
 git clone https://github.com/CvChen-111/dsmv_ddi_model.git
 cd dsmv_ddi_model
 pip install torch torchvision pandas numpy scikit-learn rdkit pillow transformers
+```
 
 ## Usage
 
@@ -19,6 +20,7 @@ pip install torch torchvision pandas numpy scikit-learn rdkit pillow transformer
 python task1.py      # Conventional setting
 python task2.py      # Partial cold-start
 python task3.py      # Complete cold-start
+```
 
 ## Citation
 
