@@ -21,14 +21,3 @@ python task1.py      # Conventional setting
 python task2.py      # Partial cold-start
 python task3.py      # Complete cold-start
 ```
-
-## Citation
-
-```bibtex
-@article{chen2025dsmv,
-  title={DSMV-DDI: A Dual-level Pharmacological Semantic and Stereochemical Visual Representation Learning Framework for Drug-Drug Interaction Prediction},
-  author={Chen, Fangni and Jiang, Tingting and Yang, Shuai and Yuan, Xiaohui and Wang, Chao and Gu, Lichuan},
-  journal={Information Fusion},
-  year={2025}
-}
-```
