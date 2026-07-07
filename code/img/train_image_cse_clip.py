@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""Train and use the molecular image encoder with CSE supervision."""
 
 import os
 import re
@@ -19,6 +20,7 @@ import argparse
 # =========================
 
 class DrugImageDataset(Dataset):
+    """Dataset that pairs drug images with precomputed CSE embeddings."""
 
     def __init__(self, img_dir, cse_feat_path, transform):
 
@@ -65,6 +67,7 @@ class DrugImageDataset(Dataset):
 # =========================
 
 class ImageEncoder(nn.Module):
+    """ResNet-based image encoder for molecular renderings."""
 
     def __init__(self, embed_dim=256):
 
@@ -88,6 +91,7 @@ class ImageEncoder(nn.Module):
 
 
 class CSEEncoder(nn.Module):
+    """Projection head for CSE features used in contrastive training."""
 
     def __init__(self, input_dim, embed_dim=256):
 
@@ -102,6 +106,7 @@ class CSEEncoder(nn.Module):
 
 
 class CLIP(nn.Module):
+    """Contrastive model aligning molecular images and CSE features."""
 
     def __init__(self, cse_dim):
 
@@ -127,6 +132,7 @@ class CLIP(nn.Module):
 # =========================
 
 def train(args):
+    """Train the image encoder using image-CSE contrastive alignment."""
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -195,6 +201,7 @@ def train(args):
 # =========================
 
 def extract(img_dir, encoder_path, output):
+    """Extract image embeddings with a trained image encoder."""
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

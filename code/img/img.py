@@ -1,3 +1,4 @@
+"""Render optimized 3D molecular conformers into four-view PNG images."""
 import os
 from rdkit import Chem
 import py3Dmol
@@ -7,14 +8,14 @@ from selenium.webdriver.chrome.options import Options
 from io import BytesIO
 from PIL import Image
 
-# ---------------- 配置 ----------------
-SDF_DIR = "drug_3d"  # SDF 文件夹
-OUTPUT_DIR = "drug_3d_png"  # 输出 PNG 文件夹
-VIEWS = [(0, 0), (90, 0), (180, 0), (270, 0)]  # 4个旋转视角
+# ---------------- Configuration ----------------
+SDF_DIR = "drug_3d"  # SDF directory
+OUTPUT_DIR = "drug_3d_png"  # Output PNG directory
+VIEWS = [(0, 0), (90, 0), (180, 0), (270, 0)]  # Four rotation views
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# ---------------- headless Chrome 配置 ----------------
+# ---------------- Headless Chrome configuration ----------------
 chrome_options = Options()
 chrome_options.add_argument("--headless")
 chrome_options.add_argument("--disable-gpu")
@@ -23,8 +24,9 @@ chrome_options.add_argument("--window-size=800,800")
 driver = webdriver.Chrome(options=chrome_options)
 
 
-# ---------------- 渲染函数 ----------------
+# ---------------- Rendering function ----------------
 def render_sdf_to_png(sdf_path, output_prefix):
+    """Render one SDF molecule from four viewpoints and save PNG files."""
     mol_supplier = Chem.SDMolSupplier(sdf_path, removeHs=False)
     mol_supplier = [m for m in mol_supplier if m is not None]
     if len(mol_supplier) == 0:
@@ -32,10 +34,10 @@ def render_sdf_to_png(sdf_path, output_prefix):
         return
     mol = mol_supplier[0]
 
-    # 转换为 molblock (3D 坐标)
+    # Convert the molecule to a molblock with 3D coordinates.
     mol_block = Chem.MolToMolBlock(mol)
 
-    # 创建 py3Dmol Viewer
+    # Create a py3Dmol viewer.
     for idx, (rot_y, rot_x) in enumerate(VIEWS):
         view = py3Dmol.view(width=400, height=400)
         view.addModel(mol_block, "mol")
@@ -43,18 +45,18 @@ def render_sdf_to_png(sdf_path, output_prefix):
         view.zoomTo()
         view.rotate(rot_x, rot_y)
 
-        # 获取 base64 图片
+        # Decode the base64 image returned by py3Dmol.
         img_b64 = view.png()
         img_data = base64.b64decode(img_b64.split(',')[1])
         img = Image.open(BytesIO(img_data))
 
-        # 保存
+        # Save the rendered view.
         out_path = f"{output_prefix}_view{idx}.png"
         img.save(out_path)
         print(f"[INFO] Saved {out_path}")
 
 
-# ---------------- 批量处理 ----------------
+# ---------------- Batch processing ----------------
 for sdf_file in os.listdir(SDF_DIR):
     if sdf_file.endswith(".sdf"):
         sdf_path = os.path.join(SDF_DIR, sdf_file)

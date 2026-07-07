@@ -1,3 +1,4 @@
+"""Generate optimized 3D SDF conformers from drug SMILES strings."""
 import os
 import pandas as pd
 from tqdm import tqdm
@@ -5,10 +6,10 @@ from tqdm import tqdm
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-# ================= 配置区 =================
-CSV_PATH = "/data/cclsol/cfn/MF-Qwen/CD/vision/572drug_smile.csv"
+# ================= Configuration =================
+CSV_PATH = "path/572drug_smile.csv"
 OUT_DIR = "drug_3d"
-NUM_CONFS = 1          # 每个分子生成多少个构象（先 5 个就够）
+NUM_CONFS = 1          # Number of conformers generated for each molecule
 RANDOM_SEED = 42
 # =========================================
 
@@ -29,10 +30,10 @@ for _, row in tqdm(df.iterrows(), total=len(df)):
         failed += 1
         continue
 
-    # 1. 加氢
+    # 1. Add hydrogens.
     mol = Chem.AddHs(mol)
 
-    # 2. 3D 构象生成（ETKDG）
+    # 2. Generate 3D conformers with ETKDG.
     params = AllChem.ETKDGv3()
     params.randomSeed = RANDOM_SEED
     params.numThreads = 0
@@ -53,7 +54,7 @@ for _, row in tqdm(df.iterrows(), total=len(df)):
         failed += 1
         continue
 
-    # 3. 力场优化（MMFF 优先）
+    # 3. Optimize conformers with MMFF when available.
     try:
         AllChem.MMFFOptimizeMoleculeConfs(mol)
     except:
@@ -62,7 +63,7 @@ for _, row in tqdm(df.iterrows(), total=len(df)):
         except:
             print(f"[WARN] Optimization failed: {drug_id}")
 
-    # 4. 保存为 SDF（一个文件一个分子，包含多个 conformers）
+    # 4. Save one SDF file per molecule.
     out_path = os.path.join(OUT_DIR, f"{drug_id}.sdf")
     writer = Chem.SDWriter(out_path)
     for conf_id in conf_ids:
