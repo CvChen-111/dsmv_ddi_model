@@ -4,13 +4,6 @@ import requests
 import pandas as pd
 import time
 
-# ====== 1. 配置硅基流动 API ======
-url = "https://api.siliconflow.cn/v1/chat/completions"
-headers = {
-    "Authorization": "Bearer sk-gdjldkkxukrtjuyksgfegptmrfsswpnrxgcedgsowmkjhinr",  # 注意：去掉 < > 符号/这里是9512-api
-    "Content-Type": "application/json"
-}
-
 # ====== 2. 读取药物数据 ======
 # 假设你的药物文件叫 drug_names_pandas.csv，包含一列 drug_name
 df = pd.read_csv("E:\others\MF\CD\ceshi-1\drug_names.csv")
