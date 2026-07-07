@@ -1,19 +1,9 @@
-# enhanced_cse_extractor.py
-"""
-增强版 CSE 通道特征提取脚本
-- Graph-CSE: GINConv + GCNConv + TransformerConv + Attention Pooling
-- 可选融合 ChemBERTa embedding
-- 输出单药物 embedding 和药物对级别特征 [A, B, A*B, |A-B|]
-Usage:
-    python enhanced_cse_extractor.py \
-        --smiles_csv 572drug_smile.csv \
-        --output_drug_pt drug_graph_features.pt \
-        --output_pair_pt drug_pair_cse_features.pt \
-        --use_chemberta chemberta_features.pt \
-        --device cuda
-"""
-
 import argparse
+"""Extract chemical substructure encoding (CSE) features from SMILES.
+
+The Graph-CSE encoder produces single-drug molecular graph embeddings. Drug-pair
+features can then be constructed as [A, B, A*B, |A-B|] for DDI prediction.
+"""
 import os
 import torch
 import torch.nn as nn
@@ -52,6 +42,7 @@ except Exception:
 
 # ---------------- Model ----------------
 class GraphCSE(nn.Module):
+    """Graph neural encoder for molecular substructure representations."""
     def __init__(
         self,
         in_node_dim,

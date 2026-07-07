@@ -1,3 +1,8 @@
+"""Utilities for constructing molecular graph inputs for CSE features.
+
+This script converts SMILES strings into atom features, bond features, and
+PyTorch Geometric graph objects used by the chemical substructure encoder.
+"""
 import itertools
 from collections import defaultdict
 from operator import neg
@@ -50,6 +55,7 @@ for i in range(len(DRUG_INDX_NAME_DICT)):
 
 
 def one_of_k_encoding_unk(x, allowable_set):
+    """One-hot encode a value and map unseen values to the last category."""
     if x not in allowable_set:
         x = allowable_set[-1]
     return list(map(lambda s: x == s, allowable_set))
@@ -57,16 +63,17 @@ def one_of_k_encoding_unk(x, allowable_set):
 def atom_features(atom,
                 explicit_H=True,
                 use_chirality=False):
+    """Build atom-level descriptors from RDKit atom attributes."""
 
     results = one_of_k_encoding_unk(
         atom.GetSymbol(),
         ['C','N','O', 'S','F','Si','P', 'Cl','Br','Mg','Na','Ca','Fe','As','Al','I','B','V','K','Tl',
             'Yb','Sb','Sn','Ag','Pd','Co','Se','Ti','Zn','H', 'Li','Ge','Cu','Au','Ni','Cd','In',
             'Mn','Zr','Cr','Pt','Hg','Pb','Unknown'
-        ]) + [atom.GetDegree()/10, atom.GetImplicitValence(),   # 原子度数、隐含化合价
-                # 电荷、自由基电子数
+        ]) + [atom.GetDegree()/10, atom.GetImplicitValence(),   # Atom degree and implicit valence
+                # Formal charge and radical electron count
                 atom.GetFormalCharge(), atom.GetNumRadicalElectrons()] + \
-                one_of_k_encoding_unk(atom.GetHybridization(), [    # 杂化类型
+                one_of_k_encoding_unk(atom.GetHybridization(), [    # Hybridization type
                 Chem.rdchem.HybridizationType.SP, Chem.rdchem.HybridizationType.SP2,
                 Chem.rdchem.HybridizationType.SP3, Chem.rdchem.HybridizationType.
                                     SP3D, Chem.rdchem.HybridizationType.SP3D2
@@ -89,6 +96,7 @@ def atom_features(atom,
 
 
 def get_atom_features(atom, mode='one_hot'):
+    """Return atom features in the requested representation mode."""
 
     if mode == 'one_hot':
         atom_feature = torch.cat([
@@ -110,6 +118,7 @@ def get_atom_features(atom, mode='one_hot'):
     return atom_feature
 
 def bond_features(bond):
+    """Build bond-level descriptors from RDKit bond attributes."""
     bt = bond.GetBondType()
     bond_feats = [
         bt == Chem.rdchem.BondType.SINGLE, bt == Chem.rdchem.BondType.DOUBLE,
@@ -123,6 +132,7 @@ def bond_features(bond):
     return torch.from_numpy(results)
 
 def get_mol_edge_list_and_feat_mtx(mol_graph):
+    """Convert an RDKit molecule into node and edge feature matrices."""
     n_features = [(atom.GetIdx(), atom_features(atom)) for atom in mol_graph.GetAtoms()]
     n_features.sort()
     _, n_features = zip(*n_features)
@@ -141,6 +151,7 @@ def get_mol_edge_list_and_feat_mtx(mol_graph):
     return undirected_edge_list.T, n_features, e_features
 
 def get_bipartite_graph(mol_graph_1,mol_graph_2):
+    """Build cross-molecule atom pair edges for a drug pair."""
     x1 = np.arange(0,len(mol_graph_1.GetAtoms()))
     x2 = np.arange(0,len(mol_graph_2.GetAtoms()))
     edge_list = torch.LongTensor(np.meshgrid(x1,x2))
@@ -156,6 +167,7 @@ MOL_EDGE_LIST_FEAT_MTX = {drug_id: mol for drug_id, mol in MOL_EDGE_LIST_FEAT_MT
 TOTAL_ATOM_FEATS = (next(iter(MOL_EDGE_LIST_FEAT_MTX.values()))[1].shape[-1])
 
 def drug_structure_construct_peb(batch):
+    """Construct batched molecular graph tensors for DDI samples."""
     def __create_graph_data(id):
         edge_index = MOL_EDGE_LIST_FEAT_MTX[id][0]
         n_features = MOL_EDGE_LIST_FEAT_MTX[id][1]
@@ -209,6 +221,7 @@ def drug_structure_construct_peb(batch):
 
 
 class DrugDataset(Dataset):
+    """Dataset wrapper for drug-pair graph samples."""
     def __init__(self, tri_list, disjoint_split=True, shuffle=False):
         ''''disjoint_split: Consider whether entities should appear in one and only one split of the dataset
         '''
@@ -285,6 +298,6 @@ class DrugDataset(Dataset):
         return Data(x=edge_attr, edge_index=torch.LongTensor())
 
 class DrugDataLoader(DataLoader):
+    """DataLoader with the graph-aware collate function from DrugDataset."""
     def __init__(self, data, **kwargs):
         super().__init__(data, collate_fn=data.collate_fn, **kwargs)
-
