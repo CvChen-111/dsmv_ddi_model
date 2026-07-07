@@ -1,3 +1,4 @@
+"""Fine-tune BERT on single-drug pharmacological descriptions."""
 import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -5,16 +6,17 @@ from transformers import BertTokenizer, BertForMaskedLM, AdamW
 from sklearn.model_selection import train_test_split
 import numpy as np
 
-# ====== 配置参数 ======
-MODEL_NAME = '/data/cclsol/cfn/MF-bert-0.959/CD/code/bert-base-uncased'
+# ====== Configuration ======
+MODEL_NAME = 'PATH/bert-base-uncased'
 MAX_LENGTH = 128
 BATCH_SIZE = 16
 EPOCHS = 3
 LEARNING_RATE = 2e-5
 
 
-# ====== 1. 数据准备 ======
+# ====== 1. Dataset preparation ======
 class DrugDescriptionDataset(Dataset):
+    """Dataset wrapper for tokenized single-drug descriptions."""
     def __init__(self, descriptions, tokenizer, max_length):
         self.descriptions = descriptions
         self.tokenizer = tokenizer
@@ -26,7 +28,7 @@ class DrugDescriptionDataset(Dataset):
     def __getitem__(self, idx):
         description = str(self.descriptions[idx])
 
-        # 对描述进行编码
+        # Tokenize the description text.
         encoding = self.tokenizer(
             description,
             max_length=self.max_length,
@@ -35,13 +37,13 @@ class DrugDescriptionDataset(Dataset):
             return_tensors='pt'
         )
 
-        # 创建掩码语言模型标签
+        # Create masked-language-model labels.
         input_ids = encoding['input_ids'].squeeze()
         labels = input_ids.clone()
 
-        # 随机掩码15%的token
+        # Randomly mask 15% of tokens.
         mask_indices = torch.rand(input_ids.shape) < 0.15
-        # 确保特殊token不被掩码
+        # Avoid masking special tokens.
         special_tokens_mask = self.tokenizer.get_special_tokens_mask(
             input_ids, already_has_special_tokens=True
         )
@@ -56,20 +58,22 @@ class DrugDescriptionDataset(Dataset):
         }
 
 
-# ====== 2. 加载数据 ======
+# ====== 2. Load data ======
 def load_data(csv_file):
+    """Load drug descriptions from CSV and split train/validation subsets."""
     df = pd.read_csv(csv_file)
     descriptions = df['description'].dropna().tolist()
     return descriptions
 
 
-# ====== 3. 微调函数 ======
+# ====== 3. Fine-tuning function ======
 def fine_tune_bert(train_descriptions, val_descriptions=None):
-    # 初始化tokenizer和模型
+    """Fine-tune BERT on description texts and save the best model."""
+    # Initialize tokenizer and model.
     tokenizer = BertTokenizer.from_pretrained(MODEL_NAME)
     model = BertForMaskedLM.from_pretrained(MODEL_NAME)
 
-    # 创建数据集
+    # Create datasets.
     train_dataset = DrugDescriptionDataset(train_descriptions, tokenizer, MAX_LENGTH)
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
 
@@ -77,14 +81,14 @@ def fine_tune_bert(train_descriptions, val_descriptions=None):
         val_dataset = DrugDescriptionDataset(val_descriptions, tokenizer, MAX_LENGTH)
         val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE)
 
-    # 优化器
+    # Optimizer.
     optimizer = AdamW(model.parameters(), lr=LEARNING_RATE)
 
-    # 训练设备
+    # Training device.
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
 
-    # 训练循环
+    # Training loop.
     model.train()
     for epoch in range(EPOCHS):
         total_loss = 0
@@ -110,26 +114,26 @@ def fine_tune_bert(train_descriptions, val_descriptions=None):
         avg_loss = total_loss / len(train_loader)
         print(f'Epoch {epoch + 1}/{EPOCHS}, Loss: {avg_loss:.4f}')
 
-    # 保存微调后的模型
+    # Save the fine-tuned model.
     model.save_pretrained('fine_tuned_bert')
     tokenizer.save_pretrained('fine_tuned_bert')
-    print("微调完成，模型已保存到 fine_tuned_bert")
+    print("Done! Model seved to fine_tuned_bert")
 
     return model, tokenizer
 
 
-# ====== 主函数 ======
+# ====== Main routine ======
 if __name__ == "__main__":
-    # 加载数据
+    # Load data.
     descriptions = load_data('drug_with_descriptions100.csv')
 
-    # 分割训练集和验证集
+    # Split training and validation subsets.
     train_descriptions, val_descriptions = train_test_split(
         descriptions, test_size=0.2, random_state=42
     )
 
-    print(f"训练样本数: {len(train_descriptions)}")
-    print(f"验证样本数: {len(val_descriptions)}")
+    print(f"train_num: {len(train_descriptions)}")
+    print(f"validation_num: {len(val_descriptions)}")
 
-    # 开始微调
+    # Start fine-tuning.
     fine_tune_bert(train_descriptions, val_descriptions)

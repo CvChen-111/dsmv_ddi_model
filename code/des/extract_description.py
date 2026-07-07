@@ -1,24 +1,39 @@
-# 生成描述文本
 
+# Generate single-drug pharmacological description texts.
+#
+# This helper queries a language model API for drug descriptions that are later
+# encoded as the single-drug semantic modality.
 import requests
+import os
 import pandas as pd
 import time
 
-# ====== 2. 读取药物数据 ======
-# 假设你的药物文件叫 drug_names_pandas.csv，包含一列 drug_name
-df = pd.read_csv("E:\others\MF\CD\ceshi-1\drug_names.csv")
+# ====== 1. Configure the SiliconFlow API ======
+url = "https://api.siliconflow.cn/v1/chat/completions"
+API_KEY = os.environ.get("SILICONFLOW_API_KEY")
+if not API_KEY:
+    raise RuntimeError("Please set the SILICONFLOW_API_KEY environment variable before running this script.")
+headers = {
+    "Authorization": f"Bearer {API_KEY}",
+    "Content-Type": "application/json"
+}
 
-# 确保有 drug_name 列
+
+# ====== 2. Load drug names ======
+# The input CSV should contain a column named drug_name.
+df = pd.read_csv("drug_names.csv")
+
 if "drug_name" not in df.columns:
-    raise ValueError("CSV 文件中缺少 'drug_name' 列")
+    raise ValueError("The CSV file must contain a 'drug_name' column.")
 
-# ====== 3. 为每个药物生成描述 ======
+
+# ====== 3. Generate one description for each drug ======
 descriptions = []
 failed_drugs = []
 
 for index, drug in enumerate(df["drug_name"]):
     try:
-        # 更具体的提示词，要求100字英文描述
+        # Use a detailed prompt to request a concise English description.
         payload = {
             "model": "deepseek-ai/DeepSeek-V3.1",
             "messages": [
@@ -31,22 +46,22 @@ for index, drug in enumerate(df["drug_name"]):
                     "content": f"Generate a 100-word English description of the drug '{drug}'. Include: 1) drug class/mechanism, 2) main indications, 3) key characteristic. Be concise and professional."
                 }
             ],
-            "max_tokens": 200,  # 限制输出长度
-            "temperature": 0.3   # 较低的温度值，使输出更确定性
+            "max_tokens": 200,  # Limit output length.
+            "temperature": 0.3   # Use a low temperature for deterministic output.
         }
 
         print(f"Processing [{index+1}/{len(df)}]: {drug}")
         
-        # 发送 POST 请求到硅基流动的 API
+        # Send the POST request to the API.
         response = requests.post(url, json=payload, headers=headers, timeout=60)
 
-        # 获取模型的响应
+        # Parse the model response.
         if response.status_code == 200:
             res = response.json()
             description = res["choices"][0]["message"]["content"].strip()
-            # 进一步确保长度控制
+            # Further control the description length.
             words = description.split()
-            if len(words) > 120:  # 如果超过40个词，截断
+            if len(words) > 120:  # Truncate overly long outputs.
                 description = ' '.join(words[:100]) + "..."
         else:
             description = None
@@ -58,33 +73,35 @@ for index, drug in enumerate(df["drug_name"]):
 
     if description:
         descriptions.append(description)
-        print(f"✓ {drug} -> {description[:50]}...")  # 只显示前50个字符
+        print(f"OK {drug} -> {description[:50]}...")  # Show only the first 50 characters.
     else:
-        descriptions.append("")  # 生成失败则添加空字符串
+        descriptions.append("")  # Store an empty string if generation fails.
         failed_drugs.append(drug)
-        print(f"✗ Failed to generate description for {drug}")
+        print(f"Failed to generate description for {drug}")
     
-    # 添加延迟，避免请求过于频繁
+    # Add a short delay to avoid overly frequent requests.
     time.sleep(1)
 
-# ====== 4. 保存结果 ======
+
+# ====== 4. Save results ======
 df["description"] = descriptions
 output_file = "drug_with_descriptions.csv"
 df.to_csv(output_file, index=False, encoding="utf-8")
-print(f"生成完成，结果已保存到 {output_file}")
+print(f"Generation completed. Results saved to {output_file}")
 
-# 显示统计信息
+
+# Display summary statistics.
 success_count = len([d for d in descriptions if d and not d.startswith("Error")])
-print(f"\n统计信息:")
-print(f"成功生成: {success_count}/{len(df)}")
-print(f"失败: {len(failed_drugs)}")
+print(f"\nSummary:")
+print(f"Successful generations: {success_count}/{len(df)}")
+print(f"Failed generations: {len(failed_drugs)}")
 
 if failed_drugs:
-    print(f"\n失败的药物:")
+    print(f"\nFailed drugs:")
     for drug in failed_drugs:
         print(f"  - {drug}")
     
-    # 保存失败列表
+    # Save the failed drug list for manual checking.
     failed_df = pd.DataFrame({"failed_drug": failed_drugs})
     failed_df.to_csv("failed_drugs.csv", index=False)
-    print("失败药物列表已保存到 failed_drugs.csv")
+    print("Failed drug list saved to failed_drugs.csv")
