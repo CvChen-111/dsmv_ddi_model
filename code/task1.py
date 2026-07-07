@@ -1,4 +1,9 @@
-# MF.py
+"""Run Task 1: conventional DDI prediction between known drugs.
+
+This script loads DDI events, four knowledge graph views, and precomputed
+multimodal features, then evaluates DSMV-DDI with five-fold cross-validation.
+Overall and class-wise metrics are saved to the result directory.
+"""
 import argparse
 import pandas as pd
 import numpy as np
@@ -53,6 +58,7 @@ os.makedirs("../result", exist_ok=True)
 from modeltask1 import FusionLayerWithCSE, GNN1, GNN2, GNN3, GNN4
 
 def setup_seed():
+    """Set random seeds and deterministic flags for reproducible training."""
     random.seed(args.seed)
     os.environ['PYTHONHASHSEED'] = str(args.seed)
     np.random.seed(args.seed)
@@ -68,6 +74,7 @@ def setup_seed():
     torch.backends.cudnn.benchmark = False
 
 def read_dataset(drug_name_id, num):
+    """Load one knowledge graph view and convert names to integer IDs."""
     kg = defaultdict(list)
     tails = {}
     relations = {}
@@ -92,6 +99,7 @@ def read_dataset(drug_name_id, num):
     return kg, len(tails), len(relations)
 
 def prepare(mechanism, action):
+    """Map textual DDI event descriptions to integer class labels."""
     d_label = {}
     d_event = []
     new_label = []
@@ -111,12 +119,14 @@ def prepare(mechanism, action):
     return new_label
 
 def l2_re(parameter):
+    """Compute L2 regularization over model parameters."""
     reg = 0
     for param in parameter:
         reg += 0.5 * (param ** 2).sum()
     return reg
 
 def roc_aupr_score(y_true, y_score, average="macro"):
+    """Compute ROC-AUPR using sklearn precision-recall utilities."""
     def _binary_roc_aupr_score(y_true, y_score):
         precision, recall, pr_thresholds = precision_recall_curve(y_true, y_score)
         return auc(recall, precision)
@@ -140,6 +150,7 @@ def roc_aupr_score(y_true, y_score, average="macro"):
     return _average_binary_score(_binary_roc_aupr_score, y_true, y_score, average)
 
 def evaluate(pred_type, pred_score, y_test, event_num):
+    """Calculate overall and per-class evaluation metrics."""
     all_eval_type = 11
     result_all = np.zeros((all_eval_type, 1), dtype=float)
     each_eval_type = 6
@@ -167,6 +178,7 @@ def evaluate(pred_type, pred_score, y_test, event_num):
     return [result_all, result_eve]
 
 def save_result(filepath, result_type, result):
+    """Save metric arrays as CSV files."""
     with open(filepath + result_type + 'task1' + '.csv', "w", newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
         for i in result:
@@ -174,6 +186,7 @@ def save_result(filepath, result_type, result):
     return 0
 
 def train(train_x, train_y, test_x, test_y, net):
+    """Train one fold and return predictions, probabilities, and accuracy."""
     loss_function = nn.CrossEntropyLoss()
     opti = torch.optim.Adam(net.parameters(), lr=args.lr, weight_decay=args.weigh_decay)
 
@@ -259,6 +272,7 @@ def train(train_x, train_y, test_x, test_y, net):
     )
 
 def main():
+    """Prepare data, build DSMV-DDI, run five folds, and save Task 1 results."""
     conn = sqlite3.connect("../dataset/event.db")
     df_drug = pd.read_sql('select * from drug;', conn)
     extraction = pd.read_sql('select * from extraction;', conn)

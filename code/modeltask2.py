@@ -1,4 +1,8 @@
-# modeltask2.py
+"""Model components for DSMV-DDI Task 2.
+
+This module reuses the multimodal DSMV-DDI encoders for partial cold-start
+prediction, where one drug in the pair may be unseen during training.
+"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -14,6 +18,7 @@ import torchvision.models as models
 
 
 class ImageEncoder(nn.Module):
+    """ResNet-based encoder that projects molecular images into embeddings."""
     def __init__(self, embed_dim=256):
         super().__init__()
         backbone = models.resnet50(weights=None)
@@ -29,6 +34,7 @@ class ImageEncoder(nn.Module):
 
 
 class GNN1(nn.Module):
+    """Knowledge graph encoder for the first drug-related graph view."""
     def __init__(self, dataset, tail_len, relation_len, args, dict1, drug_name, **kwargs):
         super(GNN1, self).__init__(**kwargs)
         self.kg, self.dict1 = dataset["dataset1"], dict1
@@ -88,6 +94,7 @@ class GNN1(nn.Module):
         return drug_f, idx, test_adj, train_or_test
 
     def arrge(self, kg, drug_name_id, neighbor_sample_size, n_drug=572):
+        """Sample fixed-size neighbors for each drug in the graph view."""
         adj_tail = np.zeros(shape=(n_drug, neighbor_sample_size), dtype=np.int64)
         adj_relation = np.zeros(shape=(n_drug, neighbor_sample_size), dtype=np.int64)
         for i in drug_name_id:
@@ -108,6 +115,7 @@ class GNN1(nn.Module):
 
 
 class GNN2(nn.Module):
+    """Knowledge graph encoder for the second drug-related graph view."""
     def __init__(self, dataset, tail_len, relation_len, args, dict1, drug_name, **kwargs):
         super(GNN2, self).__init__(**kwargs)
         self.kg, self.dict1 = dataset["dataset2"], dict1
@@ -188,6 +196,7 @@ class GNN2(nn.Module):
 
 
 class GNN3(nn.Module):
+    """Knowledge graph encoder for the third drug-related graph view."""
     def __init__(self, dataset, tail_len, relation_len, args, dict1, drug_name, **kwargs):
         super(GNN3, self).__init__(**kwargs)
         self.kg, self.dict1 = dataset["dataset3"], dict1
@@ -277,6 +286,7 @@ class GNN3(nn.Module):
 
 
 class GNN4(nn.Module):
+    """Knowledge graph encoder for the drug-drug structure graph view."""
     def __init__(self, dataset, tail_len, relation_len, args, dict1, drug_name, **kwargs):
         super(GNN4, self).__init__(**kwargs)
         self.kg, self.dict1 = dataset["dataset4"], dict1
@@ -357,6 +367,7 @@ class GNN4(nn.Module):
 
 
 class FusionLayer(nn.Module):
+    """Fuse graph, chemical, semantic, description, and image representations."""
     def __init__(self, args, drug_id_to_name=None):
         super(FusionLayer, self).__init__()
 

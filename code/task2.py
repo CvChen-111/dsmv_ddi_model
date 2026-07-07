@@ -1,4 +1,9 @@
-# task2.py
+"""Run Task 2: partial cold-start DDI prediction.
+
+Task 2 evaluates interactions between known drugs and novel drugs. The script
+constructs cold-start splits, loads multimodal DSMV-DDI features, trains the
+model, and saves overall and class-wise evaluation metrics.
+"""
 import argparse
 import pandas as pd
 import numpy as np
@@ -45,6 +50,7 @@ print("Using device:", device)
 
 _orig_LongTensor = torch.LongTensor
 def _LongTensor_with_device(data=None, *a, **k):
+    """Create LongTensor objects directly on the selected device."""
     return torch.tensor(data, dtype=torch.long, device=device)
 torch.LongTensor = _LongTensor_with_device
 
@@ -64,6 +70,7 @@ torch.backends.cudnn.enabled = False
 
 
 def read_dataset(drug_name_id, num):
+    """Load one knowledge graph view and encode entities and relations."""
     kg = defaultdict(list)
     tails = {}
     relations = {}
@@ -89,6 +96,7 @@ def read_dataset(drug_name_id, num):
 
 
 def prepare(mechanism, action):
+    """Convert DDI mechanism/action text into event class labels."""
     d_label = {}
     d_event = []
     new_label = []
@@ -109,6 +117,7 @@ def prepare(mechanism, action):
 
 
 def l2_re(parameter):
+    """Compute L2 regularization over trainable parameters."""
     reg = 0
     for param in parameter:
         reg += 0.5 * (param ** 2).sum()
@@ -116,6 +125,7 @@ def l2_re(parameter):
 
 
 def roc_aupr_score(y_true, y_score, average="macro"):
+    """Compute ROC-AUPR for binary or multilabel targets."""
     def _binary_roc_aupr_score(y_true, y_score):
         precision, recall, pr_thresholds = precision_recall_curve(y_true, y_score)
         return auc(recall, precision)
@@ -142,6 +152,7 @@ def roc_aupr_score(y_true, y_score, average="macro"):
 
 
 def evaluate(pred_type, pred_score, y_test, event_num):
+    """Calculate overall and per-class metrics for Task 2."""
     all_eval_type = 11
     result_all = np.zeros((all_eval_type, 1), dtype=float)
     each_eval_type = 6
@@ -174,6 +185,7 @@ def evaluate(pred_type, pred_score, y_test, event_num):
 
 
 def save_result(filepath, result_type, result):
+    """Write overall or class-wise metrics to a CSV file."""
     with open(filepath + result_type + 'task2' + '.csv', "w", newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
         for i in result:
@@ -182,6 +194,7 @@ def save_result(filepath, result_type, result):
 
 
 def train(train_x, train_y, test_x, test_y, net, test_adj):
+    """Train DSMV-DDI for one partial cold-start split."""
     loss_function = nn.CrossEntropyLoss()
     opti = torch.optim.Adam(net.parameters(), lr=args.lr, weight_decay=args.weigh_decay)
     test_loss, test_acc, train_l = 0, 0, 0
@@ -239,6 +252,7 @@ def train(train_x, train_y, test_x, test_y, net, test_adj):
 
 
 def find_dif(raw_matrix):
+    """Build a drug-level interaction indicator matrix for cold-start splitting."""
     sim_matrix4 = np.zeros((572, 572), dtype=float)
     for i in range(572):
         for j in range(572):
@@ -255,6 +269,7 @@ def find_dif(raw_matrix):
 
 
 def Jaccard(matrix):
+    """Compute pairwise Jaccard similarity between drug profiles."""
     matrix = np.mat(matrix)
     numerator = matrix * matrix.T
     denominator = np.ones(np.shape(matrix)) * matrix.T + matrix * np.ones(np.shape(matrix.T)) - matrix * matrix.T
@@ -262,6 +277,7 @@ def Jaccard(matrix):
 
 
 def main():
+    """Prepare cold-start data, train Task 2 folds, and save metrics."""
     conn = sqlite3.connect("../dataset/event.db")
     df_drug = pd.read_sql('select * from drug;', conn)
     extraction = pd.read_sql('select * from extraction;', conn)
