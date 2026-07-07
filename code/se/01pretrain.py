@@ -1,3 +1,8 @@
+"""Fine-tune BERT on drug-pair semantic prompt-answer samples.
+
+The trained model is used to encode interaction-level pharmacological semantics
+for DSMV-DDI.
+"""
 import pandas as pd
 import torch
 from transformers import BertTokenizer, BertForMaskedLM, AdamW
@@ -6,16 +11,17 @@ from tqdm import tqdm
 import warnings
 warnings.filterwarnings("ignore")
 
-# 配置
-MODEL_PATH = "/data/cclsol/cfn/MF-bert-0.959/CD/code/bert-base-uncased"
-DATA_PATH = "process_event.csv"
+# Configuration
+MODEL_PATH = "path/bert-base-uncased"
+DATA_PATH = "path/process_event.csv"
 MAX_LEN = 128
 BATCH_SIZE = 16
 EPOCHS = 3
 LEARNING_RATE = 2e-5
 
-# 自定义 Dataset
+# Custom dataset
 class DrugPairDataset(Dataset):
+    """Dataset wrapper for tokenized drug-pair semantic texts."""
     def __init__(self, texts, tokenizer, max_len):
         self.texts = texts
         self.tokenizer = tokenizer
@@ -25,7 +31,7 @@ class DrugPairDataset(Dataset):
         return len(self.texts)
 
     def __getitem__(self, idx):
-        # 拼接药物对文本（prompt + answer）
+        # Concatenate prompt and answer as the drug-pair semantic text.
         text = f"{self.texts[idx]['prompt']} [SEP] {self.texts[idx]['answer']}"
         
         encoding = self.tokenizer(
@@ -37,19 +43,19 @@ class DrugPairDataset(Dataset):
             return_special_tokens_mask=True
         )
         
-        # 随机遮蔽15%的token（MLM任务）
+        # Randomly mask 15% of tokens for MLM training.
         input_ids = encoding["input_ids"].clone()
         labels = input_ids.clone()
         
-        # 创建遮蔽掩码（忽略特殊token）
+        # Build the masking matrix while ignoring special tokens.
         probability_matrix = torch.full(labels.shape, 0.15)
         special_tokens_mask = encoding["special_tokens_mask"].bool()
         probability_matrix.masked_fill_(special_tokens_mask, value=0.0)
         
         masked_indices = torch.bernoulli(probability_matrix).bool()
-        labels[~masked_indices] = -100  # 只计算遮蔽位置的loss
+        labels[~masked_indices] = -100  # Compute loss only on masked positions.
         
-        # 80%概率替换为[MASK]，10%随机token，10%保持原词
+        # Replace 80% with [MASK], 10% with random tokens, and keep 10% unchanged.
         indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
         input_ids[indices_replaced] = self.tokenizer.mask_token_id
         
@@ -63,8 +69,9 @@ class DrugPairDataset(Dataset):
             "labels": labels.squeeze(0)
         }
 
-# 加载数据
+# Load data
 def load_data():
+    """Load prompt-answer texts from CSV for BERT fine-tuning."""
     df = pd.read_csv(DATA_PATH)
     texts = []
     for _, row in df.iterrows():
@@ -74,15 +81,16 @@ def load_data():
         })
     return texts
 
-# 训练函数
+# Training function
 def train():
-    # 初始化
+    """Fine-tune BERT and save the best checkpoint."""
+    # Initialization.
     tokenizer = BertTokenizer.from_pretrained(MODEL_PATH)
     model = BertForMaskedLM.from_pretrained(MODEL_PATH)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     
-    # 数据加载
+    # Data loading.
     texts = load_data()
     train_size = int(0.9 * len(texts))
     train_texts, val_texts = texts[:train_size], texts[train_size:]
@@ -93,10 +101,10 @@ def train():
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE)
     
-    # 优化器
+    # Optimizer.
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
     
-    # 训练循环
+    # Training loop.
     for epoch in range(EPOCHS):
         model.train()
         train_loss = 0
@@ -119,7 +127,7 @@ def train():
             train_loss += loss.item()
             progress_bar.set_postfix({"loss": loss.item()})
         
-        # 验证
+        # Validation.
         model.eval()
         val_loss = 0
         with torch.no_grad():
@@ -134,7 +142,7 @@ def train():
         
         print(f"Train Loss: {train_loss/len(train_loader):.4f} | Val Loss: {val_loss/len(val_loader):.4f}")
     
-    # 保存模型
+    # Save model.
     model.save_pretrained("drug_bert_mlm")
     tokenizer.save_pretrained("drug_bert_mlm")
     print("Model saved for feature extraction.")

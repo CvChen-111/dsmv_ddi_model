@@ -1,3 +1,8 @@
+"""Prepare drug-pair semantic prompts for interaction-level BERT features.
+
+The script reads DDI events from the SQLite database and converts each drug pair
+into prompt-answer samples used by the semantic encoder.
+"""
 import random
 import sqlite3
 import pandas as pd
@@ -83,7 +88,7 @@ def save_to_csv(samples: List[Dict], output_file: str) -> None:
     print(f"Generated {len(df)} prompt-answer pairs, saved to {output_file}")
 
 if __name__ == "__main__":
-    db_path = "/data/cclsol/cfn/MF-Qwen/CD/dataset/event.db"
+    db_path = "path/dataset/event.db"
     output_file = "process_event.csv"
     
     try:

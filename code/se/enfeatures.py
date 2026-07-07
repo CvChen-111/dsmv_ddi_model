@@ -1,3 +1,4 @@
+"""Extract drug-pair semantic embeddings with the fine-tuned BERT encoder."""
 import torch
 import pandas as pd
 from transformers import BertTokenizer, BertModel
@@ -7,16 +8,17 @@ import numpy as np
 import sqlite3
 from collections import defaultdict
 
-# 配置
+# Configuration
 MODEL_PATH = "drug_bert_mlm"
 DATA_PATH = "process_event.csv"
-DB_PATH = "/data/cclsol/cfn/MF-Qwen/CD/dataset/event.db"
-OUTPUT_PATH = "endrug_pair_features.parquet"  # 修改输出文件名以区分
+DB_PATH = "path/dataset/event.db"
+OUTPUT_PATH = "endrug_pair_features.parquet"  # Output file for semantic features.
 MAX_LEN = 128
 BATCH_SIZE = 32
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class DrugPairDataset(Dataset):
+    """Dataset wrapper for drug-pair texts before BERT encoding."""
     def __init__(self, texts, tokenizer, max_len):
         self.texts = texts
         self.tokenizer = tokenizer
@@ -41,14 +43,14 @@ class DrugPairDataset(Dataset):
         }
 
 def load_drug_pairs():
-    """从CSV或数据库加载所有药物对文本"""
+    """Load drug pairs and construct semantic input text for each pair."""
     try:
-        # 从CSV加载（保留原始药物对信息）
+        # Load from CSV and keep original drug-pair metadata.
         df = pd.read_csv(DATA_PATH)
         texts = (df["prompt"] + " [SEP] " + df["answer"]).tolist()
         drug_pairs = list(zip(df["drug1"], df["drug2"]))
     except:
-        # 从数据库加载
+        # Load from SQLite database.
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT name1, name2, interaction FROM event")
@@ -60,21 +62,22 @@ def load_drug_pairs():
     return texts, drug_pairs
 
 def extract_features():
-    # 加载模型和tokenizer
+    """Encode all drug pairs and save semantic embeddings to parquet."""
+    # Load model and tokenizer.
     tokenizer = BertTokenizer.from_pretrained(MODEL_PATH)
     model = BertModel.from_pretrained(MODEL_PATH).to(DEVICE)
     model.eval()
 
-    # 加载数据
+    # Load data.
     texts, drug_pairs = load_drug_pairs()
     dataset = DrugPairDataset(texts, tokenizer, MAX_LEN)
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False)
 
-    # 使用defaultdict存储所有特征以便聚合
+    # Store all features by drug pair for aggregation.
     feature_dict = defaultdict(list)
-    drug_pair_set = set()  # 用于记录所有唯一的药物对
+    drug_pair_set = set()  # Record all unique drug pairs.
 
-    # 批量提取特征
+    # Extract features in batches.
     with torch.no_grad():
         for batch_idx, batch in enumerate(tqdm(dataloader, desc="Extracting features")):
             input_ids = batch["input_ids"].to(DEVICE)
@@ -85,40 +88,40 @@ def extract_features():
                 attention_mask=attention_mask
             )
 
-            # 使用[CLS] token作为句子表示
+            # Use the [CLS] token as the sentence representation.
             cls_embeddings = outputs.last_hidden_state[:, 0, :].cpu().numpy()
             
-            # 获取当前batch对应的药物对
+            # Retrieve the drug pairs for the current batch.
             start_idx = batch_idx * BATCH_SIZE
             end_idx = start_idx + len(batch["text"])
             current_batch_pairs = drug_pairs[start_idx:end_idx]
             
-            # 将特征按药物对分组存储
+            # Group features by drug pair.
             for pair, feat in zip(current_batch_pairs, cls_embeddings):
                 feature_dict[pair].append(feat)
                 drug_pair_set.add(pair)
 
-    # 对每个药物对的多个特征进行平均池化
+    # Average multiple prompt features for each drug pair.
     aggregated_features = []
     drug1_list = []
     drug2_list = []
     
     for pair in drug_pair_set:
         features = feature_dict[pair]
-        # 平均池化（也可以改为max pooling或其他聚合方式）
+        # Average pooling can be replaced by another aggregation strategy.
         aggregated_feat = np.mean(features, axis=0)
         aggregated_features.append(aggregated_feat)
         drug1_list.append(pair[0])
         drug2_list.append(pair[1])
 
-    # 转换为DataFrame
+    # Convert features to a DataFrame.
     df_features = pd.DataFrame({
         "drug1": drug1_list,
         "drug2": drug2_list,
         "feature": [feat for feat in aggregated_features]
     })
 
-    # 保存为Parquet格式
+    # Save features in Parquet format.
     df_features.to_parquet(OUTPUT_PATH)
     print(f"Saved AGGREGATED features for {len(df_features)} unique drug pairs to {OUTPUT_PATH}")
 
@@ -126,7 +129,7 @@ def extract_features():
 
 if __name__ == "__main__":
     features_df = extract_features()
-    # 示例：查看第一个药物对的特征
+    # Show one example feature vector.
     print("\nSample aggregated feature vector:")
     print(f"Drug Pair: {features_df.iloc[0]['drug1']} + {features_df.iloc[0]['drug2']}")
     print(f"Feature shape: {features_df.iloc[0]['feature'].shape}")
