@@ -41,7 +41,7 @@ dsmv_ddi_code/
 |   |-- dataset4.txt         
 |   `-- event.db               
 |-- result/                      
-`-- README.md
+|-- README.md
 `--requirements.txt
 ```
 
