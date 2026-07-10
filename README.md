@@ -42,7 +42,7 @@ dsmv_ddi_code/
 |   `-- event.db               
 |-- result/                      
 |-- README.md
-`--requirements.txt
+`-- requirements.txt
 ```
 
 
